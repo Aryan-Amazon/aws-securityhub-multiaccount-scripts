@@ -32,6 +32,68 @@ If you do not have a common role that includes at least the above permissions, y
 
 * A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line in the format of `AccountId,EmailAddress`. See `accounts.csv.example` for a sample file.
 
+## Creating the IAM Role
+
+If the SecurityHubRole doesn't exist in your target accounts, create it using the AWS CLI:
+
+```bash
+# In each target account, run:
+
+# 1. Create trust policy (replace EXECUTION_ACCOUNT_ID with your account)
+cat > trust-policy.json << 'EOF'
+{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::EXECUTION_ACCOUNT_ID:root"
+        },
+        "Action": "sts:AssumeRole"
+    }]
+}
+EOF
+
+# 2. Create IAM policy
+cat > iam-policy.json << 'EOF'
+{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Action": [
+            "securityhub:ListEnabledProductsForImport",
+            "securityhub:DisableImportFindingsForProduct"
+        ],
+        "Resource": "*"
+    }]
+}
+EOF
+
+# 3. Create role
+aws iam create-role \
+    --role-name SecurityHubRole \
+    --assume-role-policy-document file://trust-policy.json
+
+# 4. Attach policy
+aws iam put-role-policy \
+    --role-name SecurityHubRole \
+    --policy-name SecurityHubProductManagement \
+    --policy-document file://iam-policy.json
+```
+
+**Execution account needs:**
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Action": "sts:AssumeRole",
+        "Resource": "arn:aws:iam::*:role/SecurityHubRole"
+    }]
+}
+```
+
+See `trust-policy-example.json` and `iam-policy-example.json` for complete templates.
+
 * Python 2.7+ or Python 3.x with boto3 library installed
 
 ## Steps
@@ -178,4 +240,3 @@ You can specify products using either format:
 * If a product is not enabled in a specific account/region, it is silently skipped (not an error)
 * All errors are collected and reported at the end of execution
 * Processing continues even if some accounts fail
-

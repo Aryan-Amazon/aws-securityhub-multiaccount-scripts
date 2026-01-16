@@ -48,8 +48,8 @@ This sample code is made available under a modified MIT license. See the LICENSE
 If you do not have a common role that includes at least the above permissions, you will need to create a role in each account with these permissions. When creating the role, ensure you use the same role name in every account. See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
 
 * **Optional:** A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line with the account ID. Format: `AccountId`. See `accounts.csv.example` for a sample file.
-  - If CSV is provided: Script processes the common accounts between CSV accounts and Security Hub member accounts
-  - If CSV is not provided: Script processes **all** Security Hub member accounts
+  - If CSV is provided: Script processes **accounts from the CSV file**
+  - If CSV is not provided: Script processes **all Security Hub member accounts**
 
 ## Creating the IAM Role
 
@@ -209,9 +209,9 @@ python productdisablement.py \
     --products "aws/guardduty,aws/macie,aws/inspector2"
 ```
 
-### Using CSV File (Intersection with Member Accounts)
+### Using CSV File
 
-When providing a CSV file, the script processes only accounts that are BOTH in the CSV and in Security Hub member accounts:
+When providing a CSV file, the script processes the accounts listed in the CSV:
 
 ```bash
 # Disable GuardDuty for specific accounts (intersection of CSV and members)
@@ -258,12 +258,13 @@ You can specify products using either format:
 ## How the Script Works
 
 1. **Discovers accounts to process:**
-   - **If CSV provided:** Reads account IDs from CSV and finds intersection with Security Hub member accounts
+   - **If CSV provided:** Reads account IDs directly from the CSV file
    - **If no CSV:** Uses Security Hub `list_members` API to get all member accounts
 2. **For each account and region:**
    - Checks if account is a Security Hub member in that specific region
    - If yes, assumes the specified IAM role in that account
    - Directly disables each specified product (idempotent - safe if already disabled)
+   - If account is not a member in a region, skips that region
 3. **Reports results** including any failures
 
 ### Account Discovery Logic
@@ -272,13 +273,14 @@ The script uses the following logic to determine which accounts to process:
 
 | CSV File Provided? | Accounts Processed |
 |-------------------|-------------------|
-| ✅ Yes | **Intersection** of CSV accounts AND Security Hub member accounts |
-| ❌ No | **All** Security Hub member accounts |
+| ✅ Yes | **Accounts from CSV file** |
+| ❌ No | **All Security Hub member accounts** |
 
 **Example scenarios:**
-- CSV has [A, B, C], Security Hub members are [B, C, D] → Processes [B, C]
-- CSV has [A, B], Security Hub members are [X, Y, Z] → Warning: no common accounts
-- No CSV provided, Security Hub members are [A, B, C] → Processes [A, B, C]
+- CSV has [A, B, C] → Attempts to process [A, B, C] (skips regions where not a member)
+- No CSV provided, Security Hub members are [A, B, C] → Processes [A, B, C] (only in regions where they're members)
+
+**Note:** When using a CSV, the script will still check per-region membership. If an account in the CSV is not a Security Hub member in a specific region, that region will be skipped for that account.
 
 ## Important Notes
 

@@ -136,7 +136,7 @@ if __name__ == '__main__':
     
     # If CSV file provided, read account IDs from it
     if args.input_file:
-        print("CSV file provided - will process intersection of CSV accounts and Security Hub member accounts")
+        print("CSV file provided - will process accounts from CSV")
         for acct in args.input_file.readlines():
             split_line = acct.rstrip().split(",")
             if len(split_line) < 1:
@@ -151,15 +151,9 @@ if __name__ == '__main__':
                 
             csv_accounts.add(account_id)
         
-        # Use intersection of CSV accounts and member accounts
-        accounts_to_process = all_member_accounts.intersection(csv_accounts)
-        
-        if len(accounts_to_process) == 0:
-            print("WARNING: No accounts in common between CSV file and Security Hub member accounts!")
-            print("CSV accounts: {}".format(sorted(csv_accounts)))
-            print("Security Hub member accounts: {}".format(sorted(all_member_accounts)))
-        else:
-            print("Processing {} accounts (intersection of CSV and Security Hub member accounts)".format(len(accounts_to_process)))
+        # Use CSV accounts directly
+        accounts_to_process = csv_accounts
+        print("Processing {} accounts from CSV file".format(len(accounts_to_process)))
             
     else:
         # No CSV provided - use all member accounts

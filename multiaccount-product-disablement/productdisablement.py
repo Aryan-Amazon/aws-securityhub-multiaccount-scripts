@@ -59,32 +59,33 @@ def assume_role(aws_account_id, role_name):
     return session
 
 
-def get_security_hub_members():
+def get_master_members(sh_client, aws_region):
     """
-    Gets all Security Hub member accounts from the delegated administrator account
-    :return: Set of member account IDs
+    Returns a dict of current members of the SecurityHub master account
+    :param sh_client: SecurityHub client
+    :param aws_region: AWS Region of the SecurityHub master account
+    :return: dict of AwsAccountId:RelationshipStatus
     """
     
-    sh_client = boto3.client('securityhub')
-    member_accounts = set()
+    member_dict = dict()
     
-    try:
-        paginator = sh_client.get_paginator('list_members')
-        page_iterator = paginator.paginate(OnlyAssociated=False)
+    results = sh_client.list_members(
+        OnlyAssociated=False
+    )
+    
+    for member in results['Members']:
+        member_dict.update({member['AccountId']: member['MemberStatus']})
         
-        for page in page_iterator:
-            for member in page.get('Members', []):
-                account_id = member.get('AccountId')
-                if account_id:
-                    member_accounts.add(account_id)
+    while results.get("NextToken"):
+        results = sh_client.list_members(
+            OnlyAssociated=False,
+            NextToken=results['NextToken']
+        )
         
-        print("Found {} Security Hub member accounts".format(len(member_accounts)))
-        return member_accounts
-        
-    except ClientError as e:
-        print("Error listing Security Hub members: {}".format(repr(e)))
-        print("Make sure you're running from the delegated administrator account")
-        return set()
+        for member in results['Members']:
+            member_dict.update({member['AccountId']: member['MemberStatus']})
+            
+    return member_dict
 
 
 if __name__ == '__main__':
@@ -101,8 +102,33 @@ if __name__ == '__main__':
     product_identifiers = [str(item).strip() for item in args.products.split(',')]
     print("Products to disable: {}".format(product_identifiers))
     
-    # Get Security Hub member accounts
-    member_accounts = get_security_hub_members()
+    # Getting Security Hub regions
+    session = boto3.session.Session()
+    
+    securityhub_regions = []
+    if args.regions_to_disable.upper() == 'ALL':
+        securityhub_regions = session.get_available_regions('securityhub')
+        print("Will check for members in all available Security Hub CSPM regions: {}".format(securityhub_regions))
+    else:
+        securityhub_regions = [str(item).strip() for item in args.regions_to_disable.split(',')]
+        print("Will check for members in these regions: {}".format(securityhub_regions))
+    
+    # Get Security Hub member accounts from all regions
+    master_clients = {}
+    members = {}
+    all_member_accounts = set()
+    
+    for aws_region in securityhub_regions:
+        master_clients[aws_region] = session.client('securityhub', region_name=aws_region)
+        try:
+            members[aws_region] = get_master_members(master_clients[aws_region], aws_region)
+            all_member_accounts.update(members[aws_region].keys())
+            print("Found {} member accounts in region {}".format(len(members[aws_region]), aws_region))
+        except ClientError as e:
+            print("Error listing members in region {}: {}".format(aws_region, repr(e)))
+            members[aws_region] = {}
+    
+    print("Total unique Security Hub CSPM member accounts across all regions: {}".format(len(all_member_accounts)))
     
     # Generate dict with account information
     aws_account_dict = OrderedDict()
@@ -110,7 +136,7 @@ if __name__ == '__main__':
     
     # If CSV file provided, read account IDs from it
     if args.input_file:
-        print("CSV file provided - will process intersection of CSV accounts and Security Hub members")
+        print("CSV file provided - will process intersection of CSV accounts and Security Hub member accounts")
         for acct in args.input_file.readlines():
             split_line = acct.rstrip().split(",")
             if len(split_line) < 1:
@@ -126,19 +152,19 @@ if __name__ == '__main__':
             csv_accounts.add(account_id)
         
         # Use intersection of CSV accounts and member accounts
-        accounts_to_process = member_accounts.intersection(csv_accounts)
+        accounts_to_process = all_member_accounts.intersection(csv_accounts)
         
         if len(accounts_to_process) == 0:
-            print("WARNING: No accounts in common between CSV file and Security Hub members!")
+            print("WARNING: No accounts in common between CSV file and Security Hub member accounts!")
             print("CSV accounts: {}".format(sorted(csv_accounts)))
-            print("Security Hub members: {}".format(sorted(member_accounts)))
+            print("Security Hub member accounts: {}".format(sorted(all_member_accounts)))
         else:
-            print("Processing {} accounts (intersection of CSV and Security Hub members)".format(len(accounts_to_process)))
+            print("Processing {} accounts (intersection of CSV and Security Hub member accounts)".format(len(accounts_to_process)))
             
     else:
         # No CSV provided - use all member accounts
         print("No CSV file provided - will process all Security Hub member accounts")
-        accounts_to_process = member_accounts
+        accounts_to_process = all_member_accounts
     
     # Build ordered dict from accounts to process
     for account_id in sorted(accounts_to_process):
@@ -149,17 +175,7 @@ if __name__ == '__main__':
         exit(1)
     
     print("Total accounts to process: {}".format(len(aws_account_dict)))
-    
-    # Getting Security Hub CSPM regions
-    session = boto3.session.Session()
-    
-    securityhub_regions = []
-    if args.regions_to_disable.upper() == 'ALL':
-        securityhub_regions = session.get_available_regions('securityhub')
-        print("Disabling products in all available Security Hub CSPM regions: {}".format(securityhub_regions))
-    else:
-        securityhub_regions = [str(item).strip() for item in args.regions_to_disable.split(',')]
-        print("Disabling products in these regions: {}".format(securityhub_regions))
+    print("Disabling products in regions: {}".format(securityhub_regions))
     
     # Processing accounts
     failed_accounts = []
@@ -168,6 +184,14 @@ if __name__ == '__main__':
             session = assume_role(account, args.assume_role)
             
             for aws_region in securityhub_regions:
+                # Check if account is a member in this specific region
+                if account not in members[aws_region]:
+                    print('Account {account} is not a Security Hub member in region {region} - skipping'.format(
+                        account=account,
+                        region=aws_region
+                    ))
+                    continue
+                
                 print('Beginning {account} in {region}'.format(
                     account=account,
                     region=aws_region
@@ -175,71 +199,53 @@ if __name__ == '__main__':
                 
                 sh_client = session.client('securityhub', region_name=aws_region)
                 
-                # Get list of enabled products for this account/region
-                try:
-                    enabled_products_response = sh_client.list_enabled_products_for_import()
-                    enabled_products = enabled_products_response.get('ProductSubscriptions', [])
-                    
-                    if not enabled_products:
-                        print('  No products enabled in account {account} region {region}'.format(
-                            account=account,
-                            region=aws_region
-                        ))
-                        continue
-                    
-                    # Disable specified products
-                    for product_subscription_arn in enabled_products:
-                        # Check if this product matches any of our identifiers
-                        # ProductSubscriptionArn format: arn:aws:securityhub:region:account-id:product-subscription/product-provider/product-name
-                        product_name = product_subscription_arn.split('/')[-2] + '/' + product_subscription_arn.split('/')[-1]
-                        
-                        # Check if this product should be disabled
-                        should_disable = False
-                        for identifier in product_identifiers:
-                            if identifier in product_subscription_arn or identifier == product_name:
-                                should_disable = True
-                                break
-                        
-                        if should_disable:
-                            try:
-                                sh_client.disable_import_findings_for_product(
-                                    ProductSubscriptionArn=product_subscription_arn
-                                )
-                                print('  Disabled product {product} in account {account} region {region}'.format(
-                                    product=product_name,
-                                    account=account,
-                                    region=aws_region
-                                ))
-                            except ClientError as e:
-                                print("  Error disabling product {product} in account {account} region {region}: {error}".format(
-                                    product=product_name,
-                                    account=account,
-                                    region=aws_region,
-                                    error=repr(e)
-                                ))
-                                failed_accounts.append({
-                                    account: "Error disabling {}: {}".format(product_name, repr(e))
-                                })
-                    
-                except ClientError as e:
-                    error_code = e.response['Error']['Code']
-                    # Security Hub CSPM not enabled is not a failure - just skip this region
-                    if error_code in ['InvalidAccessException', 'ResourceNotFoundException']:
-                        print('  Security Hub CSPM not enabled in account {account} region {region} - skipping'.format(
-                            account=account,
-                            region=aws_region
-                        ))
-                        continue
-                    else:
-                        print("  Error listing products for account {account} in region {region}: {error}".format(
-                            account=account,
+                # Directly disable specified products (idempotent - safe if already disabled)
+                for product_identifier in product_identifiers:
+                    try:
+                        # Construct ProductSubscriptionArn
+                        # Format: arn:aws:securityhub:region:account-id:product-subscription/provider/product
+                        product_arn = 'arn:aws:securityhub:{region}:{account}:product-subscription/{product}'.format(
                             region=aws_region,
-                            error=repr(e)
+                            account=account,
+                            product=product_identifier
+                        )
+                        
+                        sh_client.disable_import_findings_for_product(
+                            ProductSubscriptionArn=product_arn
+                        )
+                        print('  Disabled product {product} in account {account} region {region}'.format(
+                            product=product_identifier,
+                            account=account,
+                            region=aws_region
                         ))
-                        failed_accounts.append({
-                            account: "Region {}: {}".format(aws_region, repr(e))
-                        })
-                        continue
+                        
+                    except ClientError as e:
+                        error_code = e.response['Error']['Code']
+                        # These errors are expected and not failures
+                        if error_code == 'ResourceNotFoundException':
+                            # Product not enabled or already disabled - this is fine
+                            print('  Product {product} not enabled in account {account} region {region} - skipping'.format(
+                                product=product_identifier,
+                                account=account,
+                                region=aws_region
+                            ))
+                        elif error_code in ['InvalidAccessException']:
+                            # Security Hub not enabled
+                            print('  Security Hub not enabled in account {account} region {region} - skipping'.format(
+                                account=account,
+                                region=aws_region
+                            ))
+                        else:
+                            # Actual error - record it
+                            print("  Error disabling product {product} in account {account} region {region}: {error}".format(
+                                product=product_identifier,
+                                account=account,
+                                region=aws_region,
+                                error=repr(e)
+                            ))
+                            failed_accounts.append({
+                                account: "Error disabling {}: {}".format(product_identifier, repr(e))
+                            })
                 
                 print('Finished {account} in {region}'.format(account=account, region=aws_region))
                     

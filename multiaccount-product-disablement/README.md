@@ -19,7 +19,6 @@ This sample code is made available under a modified MIT license. See the LICENSE
         {
             "Effect": "Allow",
             "Action": [
-                "securityhub:ListEnabledProductsForImport",
                 "securityhub:DisableImportFindingsForProduct"
             ],
             "Resource": "*"
@@ -28,7 +27,7 @@ This sample code is made available under a modified MIT license. See the LICENSE
 }
 ```
 
-**Execution Account Permissions:** The account/role executing this script (typically the delegated administrator) needs `securityhub:ListMembers` permission to auto-discover member accounts:
+**Execution Account Permissions:** The account/role executing this script (delegated administrator account) needs `securityhub:ListMembers` permission to auto-discover Security Hub member accounts:
 
 ```json
 {
@@ -49,7 +48,7 @@ This sample code is made available under a modified MIT license. See the LICENSE
 If you do not have a common role that includes at least the above permissions, you will need to create a role in each account with these permissions. When creating the role, ensure you use the same role name in every account. See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
 
 * **Optional:** A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line with the account ID. Format: `AccountId`. See `accounts.csv.example` for a sample file.
-  - If CSV is provided: Script processes the **intersection** of CSV accounts and Security Hub member accounts
+  - If CSV is provided: Script processes the common accounts between CSV accounts and Security Hub member accounts
   - If CSV is not provided: Script processes **all** Security Hub member accounts
 
 ## Creating the IAM Role
@@ -80,7 +79,6 @@ cat > iam-policy.json << 'EOF'
     "Statement": [{
         "Effect": "Allow",
         "Action": [
-            "securityhub:ListEnabledProductsForImport",
             "securityhub:DisableImportFindingsForProduct"
         ],
         "Resource": "*"
@@ -196,7 +194,7 @@ optional arguments:
 When running from a delegated administrator account, the script can automatically discover all Security Hub member accounts:
 
 ```bash
-# Disable GuardDuty across ALL member accounts in all regions
+# Disable GuardDuty across ALL Security Hub member accounts in all regions
 python productdisablement.py \
     --assume_role SecurityHubRole \
     --regions-to-disable ALL \
@@ -204,7 +202,7 @@ python productdisablement.py \
 ```
 
 ```bash
-# Disable multiple products across ALL member accounts in specific regions
+# Disable multiple products across ALL Security Hub member accounts in specific regions
 python productdisablement.py \
     --assume_role SecurityHubRole \
     --regions-to-disable us-east-1,us-west-2,eu-west-1 \
@@ -213,7 +211,7 @@ python productdisablement.py \
 
 ### Using CSV File (Intersection with Member Accounts)
 
-When providing a CSV file, the script processes only accounts that are BOTH in the CSV and in Security Hub members:
+When providing a CSV file, the script processes only accounts that are BOTH in the CSV and in Security Hub member accounts:
 
 ```bash
 # Disable GuardDuty for specific accounts (intersection of CSV and members)
@@ -262,11 +260,10 @@ You can specify products using either format:
 1. **Discovers accounts to process:**
    - **If CSV provided:** Reads account IDs from CSV and finds intersection with Security Hub member accounts
    - **If no CSV:** Uses Security Hub `list_members` API to get all member accounts
-2. **For each account:**
-   - Assumes the specified IAM role in that account
-   - Queries Security Hub to list all currently enabled product integrations in each region
-   - Compares enabled products against the products specified in `--products` parameter
-   - Disables any matching products
+2. **For each account and region:**
+   - Checks if account is a Security Hub member in that specific region
+   - If yes, assumes the specified IAM role in that account
+   - Directly disables each specified product (idempotent - safe if already disabled)
 3. **Reports results** including any failures
 
 ### Account Discovery Logic
@@ -275,7 +272,7 @@ The script uses the following logic to determine which accounts to process:
 
 | CSV File Provided? | Accounts Processed |
 |-------------------|-------------------|
-| ✅ Yes | **Intersection** of CSV accounts AND Security Hub members |
+| ✅ Yes | **Intersection** of CSV accounts AND Security Hub member accounts |
 | ❌ No | **All** Security Hub member accounts |
 
 **Example scenarios:**

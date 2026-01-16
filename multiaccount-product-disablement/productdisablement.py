@@ -25,10 +25,10 @@ from collections import OrderedDict
 from botocore.exceptions import ClientError
 
 
-def assume_role(aws_account_number, role_name):
+def assume_role(aws_account_id, role_name):
     """
     Assumes the provided role in each account and returns a SecurityHub client
-    :param aws_account_number: AWS Account Number
+    :param aws_account_id: AWS Account ID
     :param role_name: Role to assume in target account
     :return: boto3 Session object
     """
@@ -41,7 +41,7 @@ def assume_role(aws_account_number, role_name):
     response = sts_client.assume_role(
         RoleArn='arn:{}:iam::{}:role/{}'.format(
             partition,
-            aws_account_number,
+            aws_account_id,
             role_name
         ),
         RoleSessionName='DisableSecurityHubProducts'
@@ -54,7 +54,7 @@ def assume_role(aws_account_number, role_name):
         aws_session_token=response['Credentials']['SessionToken']
     )
 
-    print("Assumed session for {}.".format(aws_account_number))
+    print("Assumed session for {}.".format(aws_account_id))
 
     return session
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     
     # Setup command line arguments
     parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
-    parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing the list of account IDs and Email addresses')
+    parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing account IDs (one per line, optional email addresses ignored)')
     parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
     parser.add_argument('--enabled_regions', type=str, help="Comma separated list of regions to disable products. If not specified, all available regions disabled")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")
@@ -73,20 +73,22 @@ if __name__ == '__main__':
     product_identifiers = [str(item).strip() for item in args.products.split(',')]
     print("Products to disable: {}".format(product_identifiers))
     
-    # Generate dict with account & email information
+    # Generate dict with account information
     aws_account_dict = OrderedDict()
     
     for acct in args.input_file.readlines():
         split_line = acct.rstrip().split(",")
-        if len(split_line) < 2:
+        if len(split_line) < 1:
             print("Unable to process line: {}".format(acct))
             continue
-            
-        if not re.match(r'[0-9]{12}', str(split_line[0])):
-            print("Invalid account number {}, skipping".format(split_line[0]))
+        
+        account_id = split_line[0].strip()
+        
+        if not re.match(r'[0-9]{12}', account_id):
+            print("Invalid account number {}, skipping".format(account_id))
             continue
             
-        aws_account_dict[split_line[0]] = split_line[1]
+        aws_account_dict[account_id] = True
     
     # Getting Security Hub CSPM regions
     session = boto3.session.Session()

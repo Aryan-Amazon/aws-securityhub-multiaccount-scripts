@@ -30,7 +30,7 @@ This sample code is made available under a modified MIT license. See the LICENSE
 
 If you do not have a common role that includes at least the above permissions, you will need to create a role in each account with these permissions. When creating the role, ensure you use the same role name in every account. See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
 
-* A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line in the format of `AccountId,EmailAddress`. See `accounts.csv.example` for a sample file.
+* A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line with the account ID. Email addresses are optional and ignored if present. Format: `AccountId` or `AccountId,EmailAddress`. See `accounts.csv.example` for a sample file.
 
 ## Creating the IAM Role
 
@@ -133,12 +133,16 @@ See `trust-policy-example.json` and `iam-policy-example.json` for complete templ
 
 ### 2. Create CSV File
 
-Create a CSV file with your account information. Each line should contain:
+Create a CSV file with your account information. Each line should contain an account ID (email addresses are optional and will be ignored):
+
+**Simple format (recommended):**
 ```
-AccountId,EmailAddress
+123456789012
+234567890123
+345678901234
 ```
 
-Example (`accounts.csv`):
+**Legacy format (email addresses ignored):**
 ```
 123456789012,account1@example.com
 234567890123,account2@example.com
@@ -153,11 +157,11 @@ usage: productdisablement.py [-h] --assume_role ASSUME_ROLE
                               --products PRODUCTS
                               input_file
 
-Disable SecurityHub product integrations across multiple AWS accounts
+Disable Security Hub CSPM product integrations across multiple AWS accounts
 
 positional arguments:
-  input_file            Path to CSV file containing the list of account IDs
-                        and Email addresses
+  input_file            Path to CSV file containing account IDs (one per
+                        line, optional email addresses ignored)
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -218,7 +222,7 @@ You can specify products using either format:
 
 ## How the Script Works
 
-1. **Reads the CSV file** containing account IDs and email addresses
+1. **Reads the CSV file** containing account IDs (email addresses are optional and ignored)
 2. **For each account:**
    - Assumes the specified IAM role in that account
    - Queries Security Hub to list all currently enabled product integrations in each region

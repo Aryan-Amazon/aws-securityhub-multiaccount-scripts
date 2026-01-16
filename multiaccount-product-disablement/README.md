@@ -146,7 +146,7 @@ Create a CSV file with your account information. Each line should contain an acc
 
 ```
 usage: productdisablement.py [-h] --assume_role ASSUME_ROLE
-                              [--regions-to-disable REGIONS_TO_DISABLE]
+                              --regions-to-disable REGIONS_TO_DISABLE
                               --products PRODUCTS
                               input_file
 
@@ -156,15 +156,17 @@ positional arguments:
   input_file            Path to CSV file containing account IDs (one per
                         line)
 
-optional arguments:
-  -h, --help            show this help message and exit
+required arguments:
   --assume_role ASSUME_ROLE
                         Role Name to assume in each account
   --regions-to-disable REGIONS_TO_DISABLE
-                        Comma separated list of regions to disable products.
-                        If not specified, all available regions are processed
+                        Comma separated list of regions to disable products,
+                        or 'ALL' for all available regions
   --products PRODUCTS   Comma separated list of product identifiers to disable
                         (e.g., 'aws/guardduty,aws/macie' or product ARNs)
+
+optional arguments:
+  -h, --help            show this help message and exit
 ```
 
 ## Usage Examples
@@ -174,6 +176,7 @@ optional arguments:
 ```bash
 python productdisablement.py accounts.csv \
     --assume_role SecurityHubRole \
+    --regions-to-disable ALL \
     --products "aws/guardduty"
 ```
 

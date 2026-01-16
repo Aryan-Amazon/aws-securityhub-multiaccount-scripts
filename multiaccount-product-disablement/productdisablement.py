@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
     parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing account IDs (one per line)')
     parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
-    parser.add_argument('--regions-to-disable', type=str, help="Comma separated list of regions to disable products. If not specified, all available regions disabled")
+    parser.add_argument('--regions-to-disable', type=str, required=True, help="Comma separated list of regions to disable products, or 'ALL' for all available regions")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")
     args = parser.parse_args()
     
@@ -94,12 +94,12 @@ if __name__ == '__main__':
     session = boto3.session.Session()
     
     securityhub_regions = []
-    if args.regions_to_disable:
+    if args.regions_to_disable.upper() == 'ALL':
+        securityhub_regions = session.get_available_regions('securityhub')
+        print("Disabling products in all available Security Hub CSPM regions: {}".format(securityhub_regions))
+    else:
         securityhub_regions = [str(item).strip() for item in args.regions_to_disable.split(',')]
         print("Disabling products in these regions: {}".format(securityhub_regions))
-    else:
-        securityhub_regions = session.get_available_regions('securityhub')
-        print("Disabling products in all available Security Hub CSPM regions {}".format(securityhub_regions))
     
     # Processing accounts
     failed_accounts = []

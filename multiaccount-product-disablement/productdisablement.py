@@ -130,6 +130,10 @@ if __name__ == '__main__':
     
     print("Total unique Security Hub CSPM member accounts across all regions: {}".format(len(all_member_accounts)))
     
+    # Get the DA account ID
+    sts_client = session.client('sts')
+    da_account_id = sts_client.get_caller_identity()['Account']
+    
     # Generate dict with account information
     aws_account_dict = OrderedDict()
     csv_accounts = set()
@@ -156,9 +160,16 @@ if __name__ == '__main__':
         print("Processing {} accounts from CSV file".format(len(accounts_to_process)))
             
     else:
-        # No CSV provided - use all member accounts
+        # No CSV provided - use all member accounts + DA account
         print("No CSV file provided - will process all Security Hub member accounts")
-        accounts_to_process = all_member_accounts
+        accounts_to_process = all_member_accounts.copy()
+        
+        # Add the DA (Delegated Administrator) account to the list and to members dict
+        accounts_to_process.add(da_account_id)
+        # Add DA account to members dict for all regions so it doesn't get skipped
+        for aws_region in securityhub_regions:
+            members[aws_region][da_account_id] = 'DA_ACCOUNT'
+        print("Added DA account {} to the list for processing".format(da_account_id))
     
     # Build ordered dict from accounts to process
     for account_id in sorted(accounts_to_process):
@@ -175,7 +186,12 @@ if __name__ == '__main__':
     failed_accounts = []
     for account in aws_account_dict.keys():
         try:
-            session = assume_role(account, args.assume_role)
+            # For DA account, use current session; for others, assume role
+            if account == da_account_id:
+                print("Using current session for DA account {}.".format(account))
+                account_session = boto3.session.Session()
+            else:
+                account_session = assume_role(account, args.assume_role)
             
             for aws_region in securityhub_regions:
                 # Check if account is a member in this specific region
@@ -191,7 +207,7 @@ if __name__ == '__main__':
                     region=aws_region
                 ))
                 
-                sh_client = session.client('securityhub', region_name=aws_region)
+                sh_client = account_session.client('securityhub', region_name=aws_region)
                 
                 # Directly disable specified products (idempotent - safe if already disabled)
                 for product_identifier in product_identifiers:

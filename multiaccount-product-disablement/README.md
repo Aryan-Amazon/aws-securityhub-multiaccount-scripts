@@ -8,26 +8,27 @@ This script automates the process of disabling specific AWS Security Hub product
 
 This sample code is made available under a modified MIT license. See the LICENSE file.
 
+## Account Roles
+
+This script works in a Security Hub multi-account setup with two types of accounts:
+
+**Delegated Administrator (DA) Account:**
+- This is where you RUN the script
+- Has visibility into all Security Hub member accounts
+- Can list members and assume roles in member accounts
+- Example: Your central security account
+
+**Member Accounts:**
+- These are the accounts where products will be DISABLED
+- Must have an IAM role that trusts the DA account
+- Must be enabled as Security Hub members
+- Example: Your application accounts, workload accounts
+
 ## Prerequisites
 
-* The script depends on a pre-existing IAM role in all target accounts that will be processed. The role name must be the same in all accounts and the role trust relationship needs to allow your instance or local credentials to assume the role. The policy document below contains the required permissions for the script to succeed:
+### Delegated Administrator (DA) Account
 
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "securityhub:DisableImportFindingsForProduct"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-```
-
-**Execution Account Permissions:** The account/role executing this script (delegated administrator account) needs `securityhub:ListMembers` permission to auto-discover Security Hub member accounts:
+The DA account (where you run the script) must have these permissions:
 
 ```json
 {
@@ -45,11 +46,73 @@ This sample code is made available under a modified MIT license. See the LICENSE
 }
 ```
 
-If you do not have a common role that includes at least the above permissions, you will need to create a role in each account with these permissions. When creating the role, ensure you use the same role name in every account. See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
+This allows the DA account to:
+- List all Security Hub member accounts
+- Assume roles in member accounts to disable products
 
-* **Optional:** A CSV file that includes the list of accounts to be processed. Accounts should be listed one per line with the account ID. Format: `AccountId`. See `accounts.csv.example` for a sample file.
-  - If CSV is provided: Script processes **accounts from the CSV file**
-  - If CSV is not provided: Script processes **all Security Hub member accounts**
+### Member Accounts (Target Accounts)
+
+Each member account must have an IAM role with:
+
+1. **IAM permissions** to disable products:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "securityhub:DisableImportFindingsForProduct"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+2. **Trust policy** that grants the DA account permission to assume this role:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::DA_ACCOUNT_ID:root"
+        },
+        "Action": "sts:AssumeRole"
+    }]
+}
+```
+
+**Important:** 
+- The role name must be the same in ALL member accounts (e.g., `SecurityHubRole`)
+- Replace `DA_ACCOUNT_ID` with your actual DA account ID
+- The trust policy is what grants the DA account STS access to assume the role
+
+See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
+
+### Quick Setup Summary
+
+1. **In DA Account (where you run the script):**
+   - Attach permissions: `securityhub:ListMembers`, `sts:AssumeRole`
+
+2. **In Each Member Account (where products will be disabled):**
+   - Create IAM role named `SecurityHubRole`
+   - Attach permission: `securityhub:DisableImportFindingsForProduct`
+   - Set trust policy to allow DA account to assume the role (grants STS access)
+
+3. **Ensure accounts are Security Hub members:**
+   - From DA account: `aws securityhub create-members --region REGION --account-details ...`
+
+### Optional: CSV File
+
+A CSV file with account IDs to process. Accounts should be listed one per line with the account ID. Format: `AccountId`. See `accounts.csv.example` for a sample file.
+- If CSV is provided: Script processes **accounts from the CSV file**
+- If CSV is not provided: Script processes **all Security Hub member accounts**
+
+### Software Requirements
+
+Python 2.7+ or Python 3.x with boto3 library installed
 
 ## Important: STS Regional Endpoint Configuration
 
@@ -99,19 +162,20 @@ For more information: [AWS STS Regionalized Endpoints Documentation](https://doc
 
 ## Creating the IAM Role
 
-If the SecurityHubRole doesn't exist in your target accounts, create it using the AWS CLI:
+If the SecurityHubRole doesn't exist in your member accounts, create it using the AWS CLI:
 
 ```bash
-# In each target account, run:
+# Run these commands in EACH MEMBER ACCOUNT (not the DA account)
 
-# 1. Create trust policy (replace EXECUTION_ACCOUNT_ID with your account)
+# 1. Create trust policy
+# Replace 123456789012 with your DA account ID (where you run the script)
 cat > trust-policy.json << 'EOF'
 {
     "Version": "2012-10-17",
     "Statement": [{
         "Effect": "Allow",
         "Principal": {
-            "AWS": "arn:aws:iam::EXECUTION_ACCOUNT_ID:root"
+            "AWS": "arn:aws:iam::123456789012:root"
         },
         "Action": "sts:AssumeRole"
     }]
@@ -144,21 +208,9 @@ aws iam put-role-policy \
     --policy-document file://iam-policy.json
 ```
 
-**Execution account needs:**
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [{
-        "Effect": "Allow",
-        "Action": "sts:AssumeRole",
-        "Resource": "arn:aws:iam::*:role/SecurityHubRole"
-    }]
-}
-```
+**Note:** The trust policy (step 1) grants the DA account STS access to assume this role. This is required for cross-account access.
 
 See `trust-policy-example.json` and `iam-policy-example.json` for complete templates.
-
-* Python 2.7+ or Python 3.x with boto3 library installed
 
 ## Steps
 

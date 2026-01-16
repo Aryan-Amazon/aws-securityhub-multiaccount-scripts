@@ -162,15 +162,24 @@ if __name__ == '__main__':
                                 })
                     
                 except ClientError as e:
-                    print("Error listing products for account {account} in region {region}: {error}".format(
-                        account=account,
-                        region=aws_region,
-                        error=repr(e)
-                    ))
-                    failed_accounts.append({
-                        account: repr(e)
-                    })
-                    continue
+                    error_code = e.response['Error']['Code']
+                    # Security Hub not enabled is not a failure - just skip this region
+                    if error_code in ['InvalidAccessException', 'ResourceNotFoundException']:
+                        print('  Security Hub not enabled in account {account} region {region} - skipping'.format(
+                            account=account,
+                            region=aws_region
+                        ))
+                        continue
+                    else:
+                        print("  Error listing products for account {account} in region {region}: {error}".format(
+                            account=account,
+                            region=aws_region,
+                            error=repr(e)
+                        ))
+                        failed_accounts.append({
+                            account: "Region {}: {}".format(aws_region, repr(e))
+                        })
+                        continue
                 
                 print('Finished {account} in {region}'.format(account=account, region=aws_region))
                     

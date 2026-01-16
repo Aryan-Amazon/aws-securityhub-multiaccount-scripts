@@ -146,7 +146,7 @@ Create a CSV file with your account information. Each line should contain an acc
 
 ```
 usage: productdisablement.py [-h] --assume_role ASSUME_ROLE
-                              [--enabled_regions ENABLED_REGIONS]
+                              [--regions-to-disable REGIONS_TO_DISABLE]
                               --products PRODUCTS
                               input_file
 
@@ -160,7 +160,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --assume_role ASSUME_ROLE
                         Role Name to assume in each account
-  --enabled_regions ENABLED_REGIONS
+  --regions-to-disable REGIONS_TO_DISABLE
                         Comma separated list of regions to disable products.
                         If not specified, all available regions are processed
   --products PRODUCTS   Comma separated list of product identifiers to disable
@@ -182,7 +182,7 @@ python productdisablement.py accounts.csv \
 ```bash
 python productdisablement.py accounts.csv \
     --assume_role SecurityHubRole \
-    --enabled_regions us-east-1,us-west-2,eu-west-1 \
+    --regions-to-disable us-east-1,us-west-2,eu-west-1 \
     --products "aws/guardduty,aws/macie,aws/inspector2"
 ```
 
@@ -191,7 +191,7 @@ python productdisablement.py accounts.csv \
 ```bash
 python productdisablement.py accounts.csv \
     --assume_role SecurityHubRole \
-    --enabled_regions us-east-1 \
+    --regions-to-disable us-east-1 \
     --products "aws/access-analyzer,aws/firewall-manager"
 ```
 

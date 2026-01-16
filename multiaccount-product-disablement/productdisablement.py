@@ -62,7 +62,7 @@ def assume_role(aws_account_number, role_name):
 if __name__ == '__main__':
     
     # Setup command line arguments
-    parser = argparse.ArgumentParser(description='Disable SecurityHub product integrations across multiple AWS accounts')
+    parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
     parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing the list of account IDs and Email addresses')
     parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
     parser.add_argument('--enabled_regions', type=str, help="Comma separated list of regions to disable products. If not specified, all available regions disabled")
@@ -88,7 +88,7 @@ if __name__ == '__main__':
             
         aws_account_dict[split_line[0]] = split_line[1]
     
-    # Getting SecurityHub regions
+    # Getting Security Hub CSPM regions
     session = boto3.session.Session()
     
     securityhub_regions = []
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         print("Disabling products in these regions: {}".format(securityhub_regions))
     else:
         securityhub_regions = session.get_available_regions('securityhub')
-        print("Disabling products in all available SecurityHub regions {}".format(securityhub_regions))
+        print("Disabling products in all available Security Hub CSPM regions {}".format(securityhub_regions))
     
     # Processing accounts
     failed_accounts = []

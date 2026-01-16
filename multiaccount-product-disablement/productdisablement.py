@@ -27,7 +27,7 @@ from botocore.exceptions import ClientError
 
 def assume_role(aws_account_id, role_name):
     """
-    Assumes the provided role in each account and returns a SecurityHub client
+    Assumes the provided role in each account and returns a Security Hub CSPM client
     :param aws_account_id: AWS Account ID
     :param role_name: Role to assume in target account
     :return: boto3 Session object
@@ -163,9 +163,9 @@ if __name__ == '__main__':
                     
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
-                    # Security Hub not enabled is not a failure - just skip this region
+                    # Security Hub CSPM not enabled is not a failure - just skip this region
                     if error_code in ['InvalidAccessException', 'ResourceNotFoundException']:
-                        print('  Security Hub not enabled in account {account} region {region} - skipping'.format(
+                        print('  Security Hub CSPM not enabled in account {account} region {region} - skipping'.format(
                             account=account,
                             region=aws_region
                         ))

@@ -236,7 +236,7 @@ You can specify products using either format:
 
 ## Error Handling
 
-* **Security Hub not enabled:** If Security Hub is not enabled in an account/region, that region is skipped with an informational message - this is NOT considered a failure since there are no products to disable
+* **Security Hub CSPM not enabled:** If Security Hub CSPM is not enabled in an account/region, that region is skipped with an informational message - this is NOT considered a failure since there are no products to disable
 * **Role assumption failures:** If the script cannot assume the role in an account, that account is skipped and reported in the failed accounts summary
 * **Product not enabled:** If a specified product is not enabled in a specific account/region, it is silently skipped (not an error)
 * **Other errors:** All genuine errors are collected and reported at the end of execution

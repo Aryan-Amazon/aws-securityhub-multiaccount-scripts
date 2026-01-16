@@ -44,7 +44,7 @@ def assume_role(aws_account_id, role_name):
             aws_account_id,
             role_name
         ),
-        RoleSessionName='DisableSecurityHubProducts'
+        RoleSessionName='DisableSecurityHubCSPMProducts'
     )
     
     # Storing STS credentials
@@ -61,9 +61,9 @@ def assume_role(aws_account_id, role_name):
 
 def get_admin_members(sh_client, aws_region):
     """
-    Returns a dict of current members of the Security Hub delegated administrator account
+    Returns a dict of current members of the Security Hub Administrator account
     :param sh_client: SecurityHub client
-    :param aws_region: AWS Region of the Security Hub delegated administrator account
+    :param aws_region: AWS Region of the Security Hub Administrator account
     :return: dict of AwsAccountId:RelationshipStatus
     """
     
@@ -180,7 +180,7 @@ if __name__ == '__main__':
             for aws_region in securityhub_regions:
                 # Check if account is a member in this specific region
                 if account not in members[aws_region]:
-                    print('Account {account} is not a Security Hub member in region {region} - skipping'.format(
+                    print('Account {account} is not a Security Hub CSPM member in region {region} - skipping'.format(
                         account=account,
                         region=aws_region
                     ))
@@ -225,7 +225,7 @@ if __name__ == '__main__':
                             ))
                         elif error_code in ['InvalidAccessException']:
                             # Security Hub not enabled
-                            print('  Security Hub not enabled in account {account} region {region} - skipping'.format(
+                            print('  Security Hub CSPM not enabled in account {account} region {region} - skipping'.format(
                                 account=account,
                                 region=aws_region
                             ))

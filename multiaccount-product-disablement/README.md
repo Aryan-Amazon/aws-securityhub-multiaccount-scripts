@@ -51,6 +51,52 @@ If you do not have a common role that includes at least the above permissions, y
   - If CSV is provided: Script processes **accounts from the CSV file**
   - If CSV is not provided: Script processes **all Security Hub member accounts**
 
+## Important: STS Regional Endpoint Configuration
+
+⚠️ **CRITICAL:** This script requires regional STS endpoints to be enabled.
+
+### Quick Setup (Run Before Script)
+
+```bash
+export AWS_STS_REGIONAL_ENDPOINTS=regional
+```
+
+### Permanent Setup (Recommended)
+
+Add to your `~/.aws/config` file:
+
+```ini
+[default]
+sts_regional_endpoints = regional
+region = us-east-1  # or your preferred region
+```
+
+Or use the following command to append it automatically:
+
+```bash
+cat >> ~/.aws/config << 'EOF'
+
+[default]
+sts_regional_endpoints = regional
+EOF
+```
+
+### Why This Is Required
+
+AWS is enforcing regional STS endpoints for security and compliance. Without this setting, you'll encounter errors like:
+
+```
+AccessDenied when calling GetCallerIdentity operation: 
+You are currently using the legacy global endpoint. 
+Please switch to the regional endpoint instead.
+```
+
+**What it does:** This setting tells the AWS SDK to use regional STS endpoints (e.g., `sts.us-east-1.amazonaws.com`) instead of the legacy global endpoint (`sts.amazonaws.com`).
+
+**Impact:** This setting applies to ALL STS operations and works across ALL regions the script processes.
+
+For more information: [AWS STS Regionalized Endpoints Documentation](https://docs.aws.amazon.com/sdkref/latest/guide/feature-sts-regionalized-endpoints.html)
+
 ## Creating the IAM Role
 
 If the SecurityHubRole doesn't exist in your target accounts, create it using the AWS CLI:

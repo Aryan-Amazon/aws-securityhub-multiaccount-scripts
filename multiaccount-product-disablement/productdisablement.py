@@ -59,11 +59,39 @@ def assume_role(aws_account_id, role_name):
     return session
 
 
+def get_security_hub_members():
+    """
+    Gets all Security Hub member accounts from the delegated administrator account
+    :return: Set of member account IDs
+    """
+    
+    sh_client = boto3.client('securityhub')
+    member_accounts = set()
+    
+    try:
+        paginator = sh_client.get_paginator('list_members')
+        page_iterator = paginator.paginate(OnlyAssociated=False)
+        
+        for page in page_iterator:
+            for member in page.get('Members', []):
+                account_id = member.get('AccountId')
+                if account_id:
+                    member_accounts.add(account_id)
+        
+        print("Found {} Security Hub member accounts".format(len(member_accounts)))
+        return member_accounts
+        
+    except ClientError as e:
+        print("Error listing Security Hub members: {}".format(repr(e)))
+        print("Make sure you're running from the delegated administrator account")
+        return set()
+
+
 if __name__ == '__main__':
     
     # Setup command line arguments
     parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
-    parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing account IDs (one per line)')
+    parser.add_argument('input_file', nargs='?', type=argparse.FileType('r'), help='Optional: Path to CSV file containing account IDs (one per line). If not provided, uses all Security Hub member accounts')
     parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
     parser.add_argument('--regions-to-disable', type=str, required=True, help="Comma separated list of regions to disable products, or 'ALL' for all available regions")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")
@@ -73,22 +101,54 @@ if __name__ == '__main__':
     product_identifiers = [str(item).strip() for item in args.products.split(',')]
     print("Products to disable: {}".format(product_identifiers))
     
+    # Get Security Hub member accounts
+    member_accounts = get_security_hub_members()
+    
     # Generate dict with account information
     aws_account_dict = OrderedDict()
+    csv_accounts = set()
     
-    for acct in args.input_file.readlines():
-        split_line = acct.rstrip().split(",")
-        if len(split_line) < 1:
-            print("Unable to process line: {}".format(acct))
-            continue
-        
-        account_id = split_line[0].strip()
-        
-        if not re.match(r'[0-9]{12}', account_id):
-            print("Invalid account number {}, skipping".format(account_id))
-            continue
+    # If CSV file provided, read account IDs from it
+    if args.input_file:
+        print("CSV file provided - will process intersection of CSV accounts and Security Hub members")
+        for acct in args.input_file.readlines():
+            split_line = acct.rstrip().split(",")
+            if len(split_line) < 1:
+                print("Unable to process line: {}".format(acct))
+                continue
             
+            account_id = split_line[0].strip()
+            
+            if not re.match(r'[0-9]{12}', account_id):
+                print("Invalid account number {}, skipping".format(account_id))
+                continue
+                
+            csv_accounts.add(account_id)
+        
+        # Use intersection of CSV accounts and member accounts
+        accounts_to_process = member_accounts.intersection(csv_accounts)
+        
+        if len(accounts_to_process) == 0:
+            print("WARNING: No accounts in common between CSV file and Security Hub members!")
+            print("CSV accounts: {}".format(sorted(csv_accounts)))
+            print("Security Hub members: {}".format(sorted(member_accounts)))
+        else:
+            print("Processing {} accounts (intersection of CSV and Security Hub members)".format(len(accounts_to_process)))
+            
+    else:
+        # No CSV provided - use all member accounts
+        print("No CSV file provided - will process all Security Hub member accounts")
+        accounts_to_process = member_accounts
+    
+    # Build ordered dict from accounts to process
+    for account_id in sorted(accounts_to_process):
         aws_account_dict[account_id] = True
+    
+    if len(aws_account_dict) == 0:
+        print("ERROR: No accounts to process. Exiting.")
+        exit(1)
+    
+    print("Total accounts to process: {}".format(len(aws_account_dict)))
     
     # Getting Security Hub CSPM regions
     session = boto3.session.Session()

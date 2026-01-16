@@ -5,7 +5,8 @@
             "Effect": "Allow",
             "Action": [
                 "securityhub:ListEnabledProductsForImport",
-                "securityhub:DisableImportFindingsForProduct"
+                "securityhub:DisableImportFindingsForProduct",
+                "securityhub:ListMembers"
             ],
             "Resource": "*"
         }

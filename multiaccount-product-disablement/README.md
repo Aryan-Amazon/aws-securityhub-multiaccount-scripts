@@ -20,8 +20,7 @@ This sample code is made available under a modified MIT license. See the LICENSE
             "Effect": "Allow",
             "Action": [
                 "securityhub:ListEnabledProductsForImport",
-                "securityhub:DisableImportFindingsForProduct",
-                "securityhub:ListMembers"
+                "securityhub:DisableImportFindingsForProduct"
             ],
             "Resource": "*"
         }
@@ -29,7 +28,23 @@ This sample code is made available under a modified MIT license. See the LICENSE
 }
 ```
 
-**Note:** The `securityhub:ListMembers` permission is required in the delegated administrator account to automatically discover Security Hub member accounts. This allows the script to work without a CSV file.
+**Execution Account Permissions:** The account/role executing this script (typically the delegated administrator) needs `securityhub:ListMembers` permission to auto-discover member accounts:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "securityhub:ListMembers",
+                "sts:AssumeRole"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
 
 If you do not have a common role that includes at least the above permissions, you will need to create a role in each account with these permissions. When creating the role, ensure you use the same role name in every account. See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
 

@@ -59,11 +59,11 @@ def assume_role(aws_account_id, role_name):
     return session
 
 
-def get_master_members(sh_client, aws_region):
+def get_admin_members(sh_client, aws_region):
     """
-    Returns a dict of current members of the SecurityHub master account
+    Returns a dict of current members of the Security Hub delegated administrator account
     :param sh_client: SecurityHub client
-    :param aws_region: AWS Region of the SecurityHub master account
+    :param aws_region: AWS Region of the Security Hub delegated administrator account
     :return: dict of AwsAccountId:RelationshipStatus
     """
     
@@ -114,14 +114,14 @@ if __name__ == '__main__':
         print("Will check for members in these regions: {}".format(securityhub_regions))
     
     # Get Security Hub member accounts from all regions
-    master_clients = {}
+    admin_clients = {}
     members = {}
     all_member_accounts = set()
     
     for aws_region in securityhub_regions:
-        master_clients[aws_region] = session.client('securityhub', region_name=aws_region)
+        admin_clients[aws_region] = session.client('securityhub', region_name=aws_region)
         try:
-            members[aws_region] = get_master_members(master_clients[aws_region], aws_region)
+            members[aws_region] = get_admin_members(admin_clients[aws_region], aws_region)
             all_member_accounts.update(members[aws_region].keys())
             print("Found {} member accounts in region {}".format(len(members[aws_region]), aws_region))
         except ClientError as e:

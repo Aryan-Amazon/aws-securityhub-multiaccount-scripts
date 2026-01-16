@@ -191,7 +191,7 @@ optional arguments:
 
 ### Using Auto-Discovery (No CSV File)
 
-When running from a delegated administrator account, the script can automatically discover all Security Hub member accounts:
+When running from the Security Hub delegated administrator account, the script can automatically discover all Security Hub member accounts:
 
 ```bash
 # Disable GuardDuty across ALL Security Hub member accounts in all regions

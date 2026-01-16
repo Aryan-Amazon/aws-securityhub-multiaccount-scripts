@@ -122,7 +122,7 @@ Python 2.7+ or Python 3.x with boto3 library installed
 
 ```bash
 export AWS_STS_REGIONAL_ENDPOINTS=regional
-export AWS_REGION=<preferred_region>
+export AWS_DEFAULT_REGION=<preferred_region>
 ```
 
 ### Permanent Setup (Recommended)

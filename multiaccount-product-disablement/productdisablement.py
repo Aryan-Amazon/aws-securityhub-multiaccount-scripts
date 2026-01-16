@@ -63,7 +63,7 @@ if __name__ == '__main__':
     
     # Setup command line arguments
     parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
-    parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing account IDs (one per line, optional email addresses ignored)')
+    parser.add_argument('input_file', type=argparse.FileType('r'), help='Path to CSV file containing account IDs (one per line)')
     parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
     parser.add_argument('--enabled_regions', type=str, help="Comma separated list of regions to disable products. If not specified, all available regions disabled")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")

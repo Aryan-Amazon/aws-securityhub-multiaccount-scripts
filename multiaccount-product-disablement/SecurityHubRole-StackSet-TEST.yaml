@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TEST - Deploy SecurityHubTestRole for product disablement testing'
+
+Parameters:
+  DelegatedAdminAccountId:
+    Type: String
+    Description: 'Account ID of the Security Hub Delegated Administrator'
+    AllowedPattern: '^\d{12}$'
+    ConstraintDescription: 'Must be a 12-digit AWS account ID'
+
+Resources:
+  SecurityHubTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SecurityHubTestRole
+      Description: 'TEST ROLE - For Security Hub Delegated Admin to disable product integrations'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${DelegatedAdminAccountId}:root'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: SecurityHubProductManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'securityhub:DisableImportFindingsForProduct'
+                  - 'securityhub:GetEnabledStandards'
+                  - 'securityhub:DescribeHub'
+                  - 'securityhub:ListMembers'
+                Resource: '*'
+      Tags:
+        - Key: Purpose
+          Value: SecurityHubProductDisablement-TEST
+        - Key: ManagedBy
+          Value: CloudFormationStackSet
+        - Key: Environment
+          Value: Test
+
+Outputs:
+  RoleArn:
+    Description: 'ARN of the created SecurityHub test role'
+    Value: !GetAtt SecurityHubTestRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TestRoleArn'

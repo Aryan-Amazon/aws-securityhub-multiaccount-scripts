@@ -122,6 +122,7 @@ Python 2.7+ or Python 3.x with boto3 library installed
 
 ```bash
 export AWS_STS_REGIONAL_ENDPOINTS=regional
+export AWS_REGION=<preferred_region>
 ```
 
 ### Permanent Setup (Recommended)
@@ -211,6 +212,134 @@ aws iam put-role-policy \
 **Note:** The trust policy (step 1) grants the DA account STS access to assume this role. This is required for cross-account access.
 
 See `trust-policy-example.json` and `iam-policy-example.json` for complete templates.
+
+## Automated Role Deployment Using CloudFormation StackSets (Recommended for Large Organizations)
+
+### Overview
+
+For organizations with hundreds or thousands of member accounts, manually creating IAM roles in each account is impractical. **CloudFormation StackSets** provides an automated solution to deploy the required IAM role across all member accounts simultaneously from your AWS Organizations management account.
+
+### Prerequisites
+
+1. **Access to Management Account** - You need administrative access to your AWS Organizations management account
+2. **Organizations Integration** - CloudFormation StackSets must have trusted access enabled with AWS Organizations
+3. **DA Account ID** - Know your Security Hub CSPM Delegated Administrator account ID
+
+### Step 1: Enable StackSets with Organizations (One-Time Setup)
+
+This step only needs to be done once for your organization.
+
+#### Option A: AWS Console (Recommended)
+
+1. Log into your **Management Account**
+2. Navigate to: **CloudFormation → StackSets** (https://console.aws.amazon.com/cloudformation/home#/stacksets)
+3. If prompted, click **"Enable trusted access with AWS Organizations"**
+4. Confirmation: You should see StackSets enabled
+
+#### Option B: AWS CLI
+
+```bash
+# Enable trusted access
+aws organizations enable-aws-service-access \
+    --service-principal member.org.stacksets.cloudformation.amazonaws.com
+
+# Verify it's enabled
+aws organizations list-aws-service-access-for-organization \
+    --query 'EnabledServicePrincipals[?ServicePrincipal==`member.org.stacksets.cloudformation.amazonaws.com`]'
+```
+
+### Step 2: Use the CloudFormation Template
+
+The CloudFormation template is provided in this directory as `SecurityHubRole-StackSet.yaml`. This template:
+- Creates an IAM role named `SecurityHubRole` in each member account
+- Configures the trust policy to allow your DA account to assume the role
+- Attaches the necessary Security Hub permissions
+- Tags resources for tracking
+
+**Template file:** `SecurityHubRole-StackSet.yaml` (included in this directory)
+
+### Step 3: Deploy the StackSet
+
+Replace `YOUR_DA_ACCOUNT_ID` with your actual Delegated Administrator account ID:
+
+```bash
+# Create the StackSet
+aws cloudformation create-stack-set \
+    --region us-east-1 \
+    --stack-set-name SecurityHubRoleDeployment \
+    --template-body file://SecurityHubRole-StackSet.yaml \
+    --description "Deploy SecurityHub role to all member accounts" \
+    --parameters ParameterKey=DelegatedAdminAccountId,ParameterValue=YOUR_DA_ACCOUNT_ID \
+    --permission-model SERVICE_MANAGED \
+    --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
+    --capabilities CAPABILITY_NAMED_IAM
+```
+
+Expected output:
+```json
+{
+    "StackSetId": "SecurityHubRoleDeployment:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+### Step 4: Deploy to All Member Accounts
+
+#### Option A: Deploy to Entire Organization
+
+```bash
+# Get your root organizational unit ID
+ROOT_OU=$(aws organizations list-roots --region us-east-1 --query 'Roots[0].Id' --output text)
+
+# Deploy to all accounts in the organization
+aws cloudformation create-stack-instances \
+    --region us-east-1 \
+    --stack-set-name SecurityHubRoleDeployment \
+    --deployment-targets OrganizationalUnitIds=$ROOT_OU \
+    --regions us-east-1 \
+    --operation-preferences MaxConcurrentPercentage=20,FailureTolerancePercentage=5
+```
+
+#### Option B: Deploy to Specific Organizational Unit
+
+```bash
+# List your OUs to find the right one
+aws organizations list-organizational-units-for-parent --parent-id $ROOT_OU
+
+# Deploy to specific OU
+aws cloudformation create-stack-instances \
+    --region us-east-1 \
+    --stack-set-name SecurityHubRoleDeployment \
+    --deployment-targets OrganizationalUnitIds=ou-xxxx-xxxxxxxx \
+    --regions us-east-1
+```
+
+#### Option C: Deploy to Specific Accounts (Testing)
+
+```bash
+# Deploy to specific test accounts only
+aws cloudformation create-stack-instances \
+    --region us-east-1 \
+    --stack-set-name SecurityHubRoleDeployment \
+    --deployment-targets OrganizationalUnitIds=$ROOT_OU,AccountFilterType=INTERSECTION,Accounts=111111111111,222222222222 \
+    --regions us-east-1
+```
+
+Expected output:
+```json
+{
+    "OperationId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+### Step 5: Verify and Use
+
+1. **Run the product disablement script** as normal:
+```bash
+python3 productdisablement.py \
+    --assume_role SecurityHubRole \
+    --regions-to-disable us-east-1 \
+    --products aws/guardduty
+```
 
 ## Steps
 
@@ -353,32 +482,6 @@ You can specify products using either format:
 | `aws/health` | AWS Health |
 | `aws/systems-manager-patch-manager` | Systems Manager Patch Manager |
 
-## How the Script Works
-
-1. **Discovers accounts to process:**
-   - **If CSV provided:** Reads account IDs directly from the CSV file
-   - **If no CSV:** Uses Security Hub `list_members` API to get all member accounts
-2. **For each account and region:**
-   - Checks if account is a Security Hub member in that specific region
-   - If yes, assumes the specified IAM role in that account
-   - Directly disables each specified product (idempotent - safe if already disabled)
-   - If account is not a member in a region, skips that region
-3. **Reports results** including any failures
-
-### Account Discovery Logic
-
-The script uses the following logic to determine which accounts to process:
-
-| CSV File Provided? | Accounts Processed |
-|-------------------|-------------------|
-| ✅ Yes | **Accounts from CSV file** |
-| ❌ No | **All Security Hub member accounts** |
-
-**Example scenarios:**
-- CSV has [A, B, C] → Attempts to process [A, B, C] (skips regions where not a member)
-- No CSV provided, Security Hub members are [A, B, C] → Processes [A, B, C] (only in regions where they're members)
-
-**Note:** When using a CSV, the script will still check per-region membership. If an account in the CSV is not a Security Hub member in a specific region, that region will be skipped for that account.
 
 ## Important Notes
 
@@ -387,11 +490,3 @@ The script uses the following logic to determine which accounts to process:
 * **Per-account, per-region processing** - Each account's enabled products are queried independently; the script only disables products that match the specified identifiers
 * **Continues on failure** - If one account fails, the script continues processing remaining accounts
 * **Works with any account type** - Standalone accounts, organization member accounts, or delegated administrator accounts
-
-## Error Handling
-
-* **Security Hub CSPM not enabled:** If Security Hub CSPM is not enabled in an account/region, that region is skipped with an informational message - this is NOT considered a failure since there are no products to disable
-* **Role assumption failures:** If the script cannot assume the role in an account, that account is skipped and reported in the failed accounts summary
-* **Product not enabled:** If a specified product is not enabled in a specific account/region, it is silently skipped (not an error)
-* **Other errors:** All genuine errors are collected and reported at the end of execution
-* **Continues on failure:** Processing continues even if some accounts or regions encounter errors

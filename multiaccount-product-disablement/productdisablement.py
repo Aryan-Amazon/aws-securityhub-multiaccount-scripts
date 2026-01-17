@@ -216,7 +216,19 @@ if __name__ == '__main__':
                     region=aws_region
                 ))
                 
-                sh_client = account_session.client('securityhub', region_name=aws_region)
+                try:
+                    sh_client = account_session.client('securityhub', region_name=aws_region)
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code == 'UnrecognizedClientException':
+                        print('  [SKIP] Region not enabled for account: {}'.format(aws_region))
+                        continue
+                    else:
+                        print('  [FAIL] {}'.format(repr(e)))
+                        failed_accounts.append({
+                            account: "Failed to create client in {}".format(aws_region)
+                        })
+                        continue
                 
                 # Directly disable specified products (idempotent - safe if already disabled)
                 for product_identifier in product_identifiers:
@@ -242,11 +254,14 @@ if __name__ == '__main__':
                         error_code = e.response['Error']['Code']
                         error_message = e.response['Error'].get('Message', '')
                         
-                        # Only skip these two expected cases
+                        # Skip expected cases
                         if error_code == 'ResourceNotFoundException':
                             print('  [SKIP] Product not enabled: {}'.format(product_identifier))
                         elif error_code == 'InvalidAccessException' and ('not subscribed to AWS Security Hub' in error_message or 'SecurityHub is not enabled' in error_message.lower()):
                             print('  [SKIP] Security Hub not enabled')
+                        elif error_code == 'UnrecognizedClientException':
+                            print('  [SKIP] Region not enabled for account: {}'.format(aws_region))
+                            break  # Skip remaining products for this region
                         else:
                             # Everything else - print the raw error
                             print('  [FAIL] {}'.format(repr(e)))

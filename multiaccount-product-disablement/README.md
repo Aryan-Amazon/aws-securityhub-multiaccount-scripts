@@ -336,7 +336,7 @@ Expected output:
 1. **Run the product disablement script** as normal:
 ```bash
 python3 productdisablement.py \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1 \
     --products aws/guardduty
 ```
@@ -390,23 +390,23 @@ Create a CSV file with your account information. Each line should contain an acc
 ### 3. Execute Script
 
 ```
-usage: productdisablement.py [-h] --assume_role ASSUME_ROLE
+usage: productdisablement.py [-h] --assume_role_name ASSUME_ROLE_NAME
                               --regions-to-disable REGIONS_TO_DISABLE
                               --products PRODUCTS
-                              input_file
+                              [input_file]
 
 Disable Security Hub CSPM product integrations across multiple AWS accounts
 
 positional arguments:
-  input_file            Path to CSV file containing account IDs (one per
-                        line)
+  input_file            Optional: Path to CSV file containing account IDs (one per
+                        line). If not provided, uses all Security Hub member accounts
 
 required arguments:
-  --assume_role ASSUME_ROLE
+  --assume_role_name ASSUME_ROLE_NAME
                         Role Name to assume in each account
   --regions-to-disable REGIONS_TO_DISABLE
                         Comma separated list of regions to disable products,
-                        or 'ALL' for all available regions
+                        or 'ALL' for all available regions (format: us-east-1, eu-west-1, etc.)
   --products PRODUCTS   Comma separated list of product identifiers to disable
                         (e.g., 'aws/guardduty,aws/macie' or product ARNs)
 
@@ -423,7 +423,7 @@ When running from the Security Hub delegated administrator account, the script c
 ```bash
 # Disable GuardDuty across ALL Security Hub member accounts in all regions
 python productdisablement.py \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable ALL \
     --products "aws/guardduty"
 ```
@@ -431,7 +431,7 @@ python productdisablement.py \
 ```bash
 # Disable multiple products across ALL Security Hub member accounts in specific regions
 python productdisablement.py \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1,us-west-2,eu-west-1 \
     --products "aws/guardduty,aws/macie,aws/inspector2"
 ```
@@ -443,7 +443,7 @@ When providing a CSV file, the script processes the accounts listed in the CSV:
 ```bash
 # Disable GuardDuty for specific accounts (intersection of CSV and members)
 python productdisablement.py accounts.csv \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable ALL \
     --products "aws/guardduty"
 ```
@@ -451,7 +451,7 @@ python productdisablement.py accounts.csv \
 ```bash
 # Disable multiple products in specific accounts and regions
 python productdisablement.py accounts.csv \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1,us-west-2,eu-west-1 \
     --products "aws/guardduty,aws/macie,aws/inspector2"
 ```
@@ -459,7 +459,7 @@ python productdisablement.py accounts.csv \
 ```bash
 # Disable Access Analyzer and Firewall Manager in specific accounts, us-east-1 only
 python productdisablement.py accounts.csv \
-    --assume_role SecurityHubRole \
+    --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1 \
     --products "aws/access-analyzer,aws/firewall-manager"
 ```

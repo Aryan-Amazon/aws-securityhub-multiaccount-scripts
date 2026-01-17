@@ -2,7 +2,7 @@
 
 ## Overview
 
-This script automates the process of disabling specific AWS Security Hub product integrations across multiple AWS accounts. 
+This script automates the process of disabling specific AWS Security Hub CSPM product integrations across multiple AWS accounts in an AWS Organization. It must be run from the Security Hub CSPM Delegated Administrator account.
 
 ## License Summary
 
@@ -10,19 +10,20 @@ This sample code is made available under a modified MIT license. See the LICENSE
 
 ## Account Roles
 
-This script works in a Security Hub multi-account setup with two types of accounts:
+This script works in an AWS Organizations setup with Security Hub CSPM enabled, using a Delegated Administrator account model:
 
-**Delegated Administrator (DA) Account:**
+**Security Hub CSPM Delegated Administrator Account:**
 - This is where you RUN the script
-- Has visibility into all Security Hub member accounts
+- The account designated as the Delegated Administrator for Security Hub CSPM in your AWS Organization
+- Has organizational visibility into all Security Hub CSPM member accounts
 - Can list members and assume roles in member accounts
-- Example: Your central security account
+- Example: Your central security/compliance account
 
 **Member Accounts:**
 - These are the accounts where products will be DISABLED
-- Must have an IAM role that trusts the DA account
-- Must be enabled as Security Hub members
-- Example: Your application accounts, workload accounts
+- Organization member accounts that are enabled for Security Hub CSPM
+- Must have an IAM role that trusts the Delegated Administrator account
+- Example: Your application accounts, workload accounts, sandbox accounts
 
 ## Prerequisites
 
@@ -414,7 +415,7 @@ optional arguments:
 
 ### Using Auto-Discovery (No CSV File)
 
-When running from the Security Hub delegated administrator account, the script can automatically discover all Security Hub member accounts:
+When running from the Security Hub CSPM Delegated Administrator account, the script automatically discovers all Security Hub CSPM member accounts in your AWS Organization:
 
 ```bash
 # Disable GuardDuty across ALL Security Hub member accounts in all regions

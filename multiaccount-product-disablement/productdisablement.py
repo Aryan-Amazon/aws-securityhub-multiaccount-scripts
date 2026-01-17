@@ -93,8 +93,8 @@ if __name__ == '__main__':
     # Setup command line arguments
     parser = argparse.ArgumentParser(description='Disable Security Hub CSPM product integrations across multiple AWS accounts')
     parser.add_argument('input_file', nargs='?', type=argparse.FileType('r'), help='Optional: Path to CSV file containing account IDs (one per line). If not provided, uses all Security Hub member accounts')
-    parser.add_argument('--assume_role', type=str, required=True, help="Role Name to assume in each account")
-    parser.add_argument('--regions-to-disable', type=str, required=True, help="Comma separated list of regions to disable products, or 'ALL' for all available regions")
+    parser.add_argument('--assume_role_name', type=str, required=True, help="Role Name to assume in each account")
+    parser.add_argument('--regions-to-disable', type=str, required=True, help="Comma separated list of regions to disable products, or 'ALL' for all available regions (format: us-east-1, eu-west-1, etc.)")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")
     args = parser.parse_args()
     
@@ -111,36 +111,32 @@ if __name__ == '__main__':
         print("Will check for members in all available Security Hub CSPM regions: {}".format(securityhub_regions))
     else:
         securityhub_regions = [str(item).strip() for item in args.regions_to_disable.split(',')]
+        
+        # Validate against actual available Security Hub regions
+        # This covers standard, GovCloud (us-gov-*), China (cn-*), and ISO (us-iso-*) regions
+        available_regions = session.get_available_regions('securityhub')
+        invalid_regions = [r for r in securityhub_regions if r not in available_regions]
+        
+        if invalid_regions:
+            print("ERROR: Invalid or unavailable Security Hub regions: {}".format(invalid_regions))
+            print("Available regions: {}".format(', '.join(sorted(available_regions))))
+            exit(1)
+        
         print("Will check for members in these regions: {}".format(securityhub_regions))
     
-    # Get Security Hub member accounts from all regions
-    admin_clients = {}
-    members = {}
-    all_member_accounts = set()
-    
-    for aws_region in securityhub_regions:
-        admin_clients[aws_region] = session.client('securityhub', region_name=aws_region)
-        try:
-            members[aws_region] = get_admin_members(admin_clients[aws_region], aws_region)
-            all_member_accounts.update(members[aws_region].keys())
-            print("Found {} member accounts in region {}".format(len(members[aws_region]), aws_region))
-        except ClientError as e:
-            print("Error listing members in region {}: {}".format(aws_region, repr(e)))
-            members[aws_region] = {}
-    
-    print("Total unique Security Hub CSPM member accounts across all regions: {}".format(len(all_member_accounts)))
-    
-    # Get the DA account ID
+    # Get the DA account ID (needed for both CSV and non-CSV modes)
     sts_client = session.client('sts')
     da_account_id = sts_client.get_caller_identity()['Account']
     
-    # Generate dict with account information
-    aws_account_dict = OrderedDict()
-    csv_accounts = set()
+    # Initialize members dict for all regions
+    members = {}
+    for aws_region in securityhub_regions:
+        members[aws_region] = {}
     
     # If CSV file provided, read account IDs from it
     if args.input_file:
         print("CSV file provided - will process accounts from CSV")
+        csv_accounts = set()
         for acct in args.input_file.readlines():
             split_line = acct.rstrip().split(",")
             if len(split_line) < 1:
@@ -155,13 +151,30 @@ if __name__ == '__main__':
                 
             csv_accounts.add(account_id)
         
-        # Use CSV accounts directly
+        # Use CSV accounts directly (no member fetching needed)
         accounts_to_process = csv_accounts
         print("Processing {} accounts from CSV file".format(len(accounts_to_process)))
             
     else:
-        # No CSV provided - use all member accounts + DA account
-        print("No CSV file provided - will process all Security Hub member accounts")
+        # No CSV provided - fetch and use all member accounts + DA account
+        print("No CSV file provided - will fetch all Security Hub member accounts")
+        
+        # Get Security Hub member accounts from all regions (only when needed)
+        admin_clients = {}
+        all_member_accounts = set()
+        
+        for aws_region in securityhub_regions:
+            admin_clients[aws_region] = session.client('securityhub', region_name=aws_region)
+            try:
+                members[aws_region] = get_admin_members(admin_clients[aws_region], aws_region)
+                all_member_accounts.update(members[aws_region].keys())
+                print("Found {} member accounts in region {}".format(len(members[aws_region]), aws_region))
+            except ClientError as e:
+                print("Error listing members in region {}: {}".format(aws_region, repr(e)))
+                members[aws_region] = {}
+        
+        print("Total unique Security Hub CSPM member accounts across all regions: {}".format(len(all_member_accounts)))
+        
         accounts_to_process = all_member_accounts.copy()
         
         # Add the DA (Delegated Administrator) account to the list and to members dict
@@ -171,27 +184,23 @@ if __name__ == '__main__':
             members[aws_region][da_account_id] = 'DA_ACCOUNT'
         print("Added DA account {} to the list for processing".format(da_account_id))
     
-    # Build ordered dict from accounts to process
-    for account_id in sorted(accounts_to_process):
-        aws_account_dict[account_id] = True
-    
-    if len(aws_account_dict) == 0:
+    if len(accounts_to_process) == 0:
         print("ERROR: No accounts to process. Exiting.")
         exit(1)
     
-    print("Total accounts to process: {}".format(len(aws_account_dict)))
+    print("Total accounts to process: {}".format(len(accounts_to_process)))
     print("Disabling products in regions: {}".format(securityhub_regions))
     
     # Processing accounts
     failed_accounts = []
-    for account in aws_account_dict.keys():
+    for account in sorted(accounts_to_process):
         try:
             # For DA account, use current session; for others, assume role
             if account == da_account_id:
                 print("Using current session for DA account {}.".format(account))
                 account_session = boto3.session.Session()
             else:
-                account_session = assume_role(account, args.assume_role)
+                account_session = assume_role(account, args.assume_role_name)
             
             for aws_region in securityhub_regions:
                 # Check if account is a member in this specific region
@@ -231,38 +240,27 @@ if __name__ == '__main__':
                         
                     except ClientError as e:
                         error_code = e.response['Error']['Code']
-                        # These errors are expected and not failures
+                        error_message = e.response['Error'].get('Message', '')
+                        
+                        # Only skip these two expected cases
                         if error_code == 'ResourceNotFoundException':
-                            # Product not enabled or already disabled - this is fine
-                            print('  Product {product} not enabled in account {account} region {region} - skipping'.format(
-                                product=product_identifier,
-                                account=account,
-                                region=aws_region
-                            ))
-                        elif error_code in ['InvalidAccessException']:
-                            # Security Hub not enabled
-                            print('  Security Hub CSPM not enabled in account {account} region {region} - skipping'.format(
-                                account=account,
-                                region=aws_region
-                            ))
+                            print('  [SKIP] Product not enabled: {}'.format(product_identifier))
+                        elif error_code == 'InvalidAccessException' and ('not subscribed to AWS Security Hub' in error_message or 'SecurityHub is not enabled' in error_message.lower()):
+                            print('  [SKIP] Security Hub not enabled')
                         else:
-                            # Actual error - record it
-                            print("  Error disabling product {product} in account {account} region {region}: {error}".format(
-                                product=product_identifier,
-                                account=account,
-                                region=aws_region,
-                                error=repr(e)
-                            ))
+                            # Everything else - print the raw error
+                            print('  [FAIL] {}'.format(repr(e)))
                             failed_accounts.append({
-                                account: "Error disabling {}: {}".format(product_identifier, repr(e))
+                                account: "{} in {}".format(product_identifier, aws_region)
                             })
                 
                 print('Finished {account} in {region}'.format(account=account, region=aws_region))
                     
         except ClientError as e:
-            print("Error Processing Account {}".format(account))
+            error_msg = e.response.get('Error', {}).get('Message', str(e))
+            print("[FAIL] Account {}: {}".format(account, error_msg))
             failed_accounts.append({
-                account: repr(e)
+                account: error_msg
             })
 
     if len(failed_accounts) > 0:

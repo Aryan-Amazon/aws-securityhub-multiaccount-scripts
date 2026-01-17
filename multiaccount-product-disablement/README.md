@@ -89,8 +89,6 @@ Each member account must have an IAM role with:
 - Replace `DA_ACCOUNT_ID` with your actual DA account ID
 - The trust policy is what grants the DA account STS access to assume the role
 
-See `iam-policy-example.json` for a complete policy template and `trust-policy-example.json` for the trust relationship.
-
 ### Quick Setup Summary
 
 1. **In DA Account (where you run the script):**
@@ -210,8 +208,6 @@ aws iam put-role-policy \
 ```
 
 **Note:** The trust policy (step 1) grants the DA account STS access to assume this role. This is required for cross-account access.
-
-See `trust-policy-example.json` and `iam-policy-example.json` for complete templates.
 
 ## Automated Role Deployment Using CloudFormation StackSets (Recommended for Large Organizations)
 

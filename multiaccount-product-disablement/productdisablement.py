@@ -153,6 +153,13 @@ if __name__ == '__main__':
         
         # Use CSV accounts directly (no member fetching needed)
         accounts_to_process = csv_accounts
+        
+        # Populate members dict with CSV accounts for all regions
+        # This ensures the membership check passes during processing
+        for aws_region in securityhub_regions:
+            for account in csv_accounts:
+                members[aws_region][account] = 'CSV_PROVIDED'
+        
         print("Processing {} accounts from CSV file".format(len(accounts_to_process)))
             
     else:

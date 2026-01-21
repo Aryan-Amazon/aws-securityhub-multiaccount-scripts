@@ -100,8 +100,7 @@ Each member account must have an IAM role with:
    - Attach permission: `securityhub:DisableImportFindingsForProduct`
    - Set trust policy to allow DA account to assume the role (grants STS access)
 
-3. **Ensure accounts are Security Hub members:**
-   - From DA account: `aws securityhub create-members --region REGION --account-details ...`
+**Note:** The script will only process accounts that are Security Hub members of the Delegated Administrator account.
 
 ### Optional: CSV File
 
@@ -397,7 +396,7 @@ Create a CSV file with your account information. Each line should contain an acc
 ```
 usage: productdisablement.py [-h] --assume_role_name ASSUME_ROLE_NAME
                               --regions-to-disable REGIONS_TO_DISABLE
-                              --products PRODUCTS
+                              --products PRODUCTS [--dry-run]
                               [input_file]
 
 Disable Security Hub CSPM product integrations across multiple AWS accounts
@@ -417,9 +416,35 @@ required arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  --dry-run             Preview changes without actually disabling products.
+                        Shows what would be disabled.
 ```
 
 ## Usage Examples
+
+### Dry-Run Mode (Preview Changes)
+
+**Recommended:** Always run with `--dry-run` first to preview what will be changed before executing:
+
+```bash
+# Preview disabling GuardDuty across all accounts in all regions (NO CHANGES MADE)
+python productdisablement.py \
+    --assume_role_name SecurityHubRole \
+    --regions-to-disable ALL \
+    --products "aws/guardduty" \
+    --dry-run
+```
+
+```bash
+# Preview disabling multiple products in specific regions (NO CHANGES MADE)
+python productdisablement.py \
+    --assume_role_name SecurityHubRole \
+    --regions-to-disable us-east-1,us-west-2 \
+    --products "aws/guardduty,aws/macie" \
+    --dry-run
+```
+
+Once you've reviewed the dry-run output and confirmed the changes, remove the `--dry-run` flag to execute.
 
 ### Using Auto-Discovery (No CSV File)
 

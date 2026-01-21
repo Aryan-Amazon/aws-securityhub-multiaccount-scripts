@@ -96,11 +96,22 @@ if __name__ == '__main__':
     parser.add_argument('--assume_role_name', type=str, required=True, help="Role Name to assume in each account")
     parser.add_argument('--regions-to-disable', type=str, required=True, help="Comma separated list of regions to disable products, or 'ALL' for all available regions (format: us-east-1, eu-west-1, etc.)")
     parser.add_argument('--products', type=str, required=True, help="Comma separated list of product identifiers to disable (e.g., 'aws/guardduty,aws/macie' or product ARNs)")
+    parser.add_argument('--dry-run', action='store_true', help="Preview changes without actually disabling products. Shows what would be disabled.")
     args = parser.parse_args()
     
     # Parse product list
     product_identifiers = [str(item).strip() for item in args.products.split(',')]
     print("Products to disable: {}".format(product_identifiers))
+    
+    # Display dry-run mode status
+    if args.dry_run:
+        print("\n" + "="*70)
+        print("DRY-RUN MODE ENABLED")
+        print("="*70)
+        print("NO CHANGES WILL BE MADE - This is a preview only")
+        print("Products will NOT actually be disabled")
+        print("Run without --dry-run flag to execute changes")
+        print("="*70 + "\n")
     
     # Getting Security Hub regions
     session = boto3.session.Session()
@@ -252,14 +263,21 @@ if __name__ == '__main__':
                             product=product_identifier
                         )
                         
-                        sh_client.disable_import_findings_for_product(
-                            ProductSubscriptionArn=product_arn
-                        )
-                        print('  Disabled product {product} in account {account} region {region}'.format(
-                            product=product_identifier,
-                            account=account,
-                            region=aws_region
-                        ))
+                        if args.dry_run:
+                            print('  [DRY-RUN] Would disable product {product} in account {account} region {region}'.format(
+                                product=product_identifier,
+                                account=account,
+                                region=aws_region
+                            ))
+                        else:
+                            sh_client.disable_import_findings_for_product(
+                                ProductSubscriptionArn=product_arn
+                            )
+                            print('  Disabled product {product} in account {account} region {region}'.format(
+                                product=product_identifier,
+                                account=account,
+                                region=aws_region
+                            ))
                         
                     except ClientError as e:
                         error_code = e.response['Error']['Code']

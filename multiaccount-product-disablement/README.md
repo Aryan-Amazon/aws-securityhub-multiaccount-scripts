@@ -29,7 +29,7 @@ This script works in an AWS Organizations setup with Security Hub CSPM enabled, 
 
 ### Delegated Administrator (DA) Account
 
-The DA account (where you run the script) must have these permissions:
+The role that runs the script from, in the DA account, must have these permissions:
 
 ```json
 {
@@ -105,7 +105,7 @@ Each member account must have an IAM role with:
 
 ### Optional: CSV File
 
-A CSV file with account IDs to process. Accounts should be listed one per line with the account ID. Format: `AccountId`. See `accounts.csv.example` for a sample file.
+A CSV file with account IDs to process. Accounts should be listed one per line with the account ID.
 - If CSV is provided: Script processes **accounts from the CSV file**
 - If CSV is not provided: Script processes **all Security Hub member accounts**
 
@@ -113,18 +113,31 @@ A CSV file with account IDs to process. Accounts should be listed one per line w
 
 Python 2.7+ or Python 3.x with boto3 library installed
 
-## Important: STS Regional Endpoint Configuration
+## Troubleshooting: STS Regional Endpoint Configuration (Optional)
 
-⚠️ **CRITICAL:** This script requires regional STS endpoints to be enabled.
+If you encounter STS-related errors when running the script, you may need to configure regional STS endpoints.
 
-### Quick Setup (Run Before Script)
+### Symptoms
 
+You might see errors like:
+
+```
+AccessDenied when calling GetCallerIdentity operation: 
+You are currently using the legacy global endpoint. 
+Please switch to the regional endpoint instead.
+```
+
+### Solution
+
+If you encounter this error, configure regional STS endpoints:
+
+**Temporary fix (current session only):**
 ```bash
 export AWS_STS_REGIONAL_ENDPOINTS=regional
 export AWS_DEFAULT_REGION=<preferred_region>
 ```
 
-### Permanent Setup (Recommended)
+**Permanent fix (recommended):**
 
 Add to your `~/.aws/config` file:
 
@@ -134,7 +147,7 @@ sts_regional_endpoints = regional
 region = us-east-1  # or your preferred region
 ```
 
-Or use the following command to append it automatically:
+Or use this command:
 
 ```bash
 cat >> ~/.aws/config << 'EOF'
@@ -144,23 +157,18 @@ sts_regional_endpoints = regional
 EOF
 ```
 
-### Why This Is Required
-
-AWS is enforcing regional STS endpoints for security and compliance. Without this setting, you'll encounter errors like:
-
-```
-AccessDenied when calling GetCallerIdentity operation: 
-You are currently using the legacy global endpoint. 
-Please switch to the regional endpoint instead.
-```
-
 **What it does:** This setting tells the AWS SDK to use regional STS endpoints (e.g., `sts.us-east-1.amazonaws.com`) instead of the legacy global endpoint (`sts.amazonaws.com`).
-
-**Impact:** This setting applies to ALL STS operations and works across ALL regions the script processes.
 
 For more information: [AWS STS Regionalized Endpoints Documentation](https://docs.aws.amazon.com/sdkref/latest/guide/feature-sts-regionalized-endpoints.html)
 
 ## Creating the IAM Role
+
+The necessary IAM role for member accounts can be created in each account individually via the AWS CLI, or deployed in bulk across all member accounts via CloudFormation StackSets. Choose the method that best fits your organization:
+
+- **[CLI Method](#cli-method)** - For individual accounts or small-scale deployments
+- **[CloudFormation StackSets Method](#automated-role-deployment-using-cloudformation-stacksets-recommended-for-large-organizations)** - For bulk deployment across multiple accounts (recommended for large organizations)
+
+### CLI Method
 
 If the SecurityHubRole doesn't exist in your member accounts, create it using the AWS CLI:
 
@@ -338,7 +346,7 @@ python3 productdisablement.py \
     --products aws/guardduty
 ```
 
-## Steps
+## Script Execution Steps
 
 ### 1. Setup Execution Environment
 

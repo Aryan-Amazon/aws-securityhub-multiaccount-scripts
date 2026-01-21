@@ -430,7 +430,7 @@ python productdisablement.py \
 python productdisablement.py \
     --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1,us-west-2,eu-west-1 \
-    --products "aws/guardduty,aws/macie,aws/inspector2"
+    --products "aws/guardduty,aws/macie,aws/inspector"
 ```
 
 ### Using CSV File
@@ -450,7 +450,7 @@ python productdisablement.py accounts.csv \
 python productdisablement.py accounts.csv \
     --assume_role_name SecurityHubRole \
     --regions-to-disable us-east-1,us-west-2,eu-west-1 \
-    --products "aws/guardduty,aws/macie,aws/inspector2"
+    --products "aws/guardduty,aws/macie,aws/inspector"
 ```
 
 ```bash
@@ -464,7 +464,7 @@ python productdisablement.py accounts.csv \
 ## Product Identifiers
 
 You can specify products using either format:
-- **Short name format**: `aws/guardduty`, `aws/macie`, `aws/inspector2`
+- **Short name format**: `aws/guardduty`, `aws/macie`, `aws/inspector`
 - **Full ARN format**: `arn:aws:securityhub:us-east-1:123456789012:product-subscription/aws/guardduty`
 
 ### Common AWS Product Identifiers
@@ -473,7 +473,7 @@ You can specify products using either format:
 |-------------------|---------|
 | `aws/guardduty` | Amazon GuardDuty |
 | `aws/macie` | Amazon Macie |
-| `aws/inspector2` | Amazon Inspector |
+| `aws/inspector` | Amazon Inspector |
 | `aws/access-analyzer` | IAM Access Analyzer |
 | `aws/firewall-manager` | AWS Firewall Manager |
 | `aws/health` | AWS Health |
